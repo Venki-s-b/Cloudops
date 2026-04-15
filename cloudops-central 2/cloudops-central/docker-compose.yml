@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  # ── Backend API ──────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cloudops-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: "sqlite:////data/cloudops.db"
+    volumes:
+      - cloudops-data:/data
+    networks:
+      - cloudops-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+  # ── Frontend (nginx static server) ──────────────────────────────────────────
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: cloudops-frontend
+    restart: unless-stopped
+    ports:
+      - "8001:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - cloudops-net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  cloudops-data:
+    driver: local
+
+networks:
+  cloudops-net:
+    driver: bridge
